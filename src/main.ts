@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 // import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
+// import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import anime from 'animejs/lib/anime.es.js';
 import tile_url from "./tile.glb?url";
-import env_texture_url from "./tiergarten_2k.exr?url";
+// import env_texture_url from "./tiergarten_2k.exr?url";
 import { lerp } from 'three/src/math/MathUtils.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -26,7 +26,14 @@ const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerH
 const renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvas });
 renderer.shadowMap.enabled = true;
 
-let composer_rendertarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { samples: 4 });
+let composer_rendertarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+  samples: 4,
+  // these are required to avoid color banding
+  minFilter: THREE.LinearFilter,
+  magFilter: THREE.LinearFilter,
+  format: THREE.RGBAFormat,
+  type: THREE.FloatType
+});
 const composer = new EffectComposer(renderer, composer_rendertarget);
 composer.setSize(window.innerWidth, window.innerHeight);
 composer.addPass(new RenderPass(scene, camera));
@@ -35,7 +42,7 @@ composer.addPass(new RenderPass(scene, camera));
 // 
 var pixelRatio = renderer.getPixelRatio();
 let bloom_pass = new UnrealBloomPass(
-  new THREE.Vector2(window.innerWidth * pixelRatio, window.innerHeight * pixelRatio),
+  new THREE.Vector2(1 / window.innerWidth * pixelRatio, 1 / window.innerHeight * pixelRatio),
   // new THREE.Vector2(1 / window.innerWidth, 1 / window.innerHeight),
   // new THREE.Vector2(1, 1),
   .7,
@@ -58,51 +65,52 @@ camera.lookAt(0, 0, 0.75);
 let tiles: Tile[][] = [];
 const tile_spacing = 2.06;
 
-const env_generator = new THREE.PMREMGenerator(renderer);
-env_generator.compileEquirectangularShader();
+// no env texture
+// const env_generator = new THREE.PMREMGenerator(renderer);
+// env_generator.compileEquirectangularShader();
+// let env_texture: THREE.Texture;
 
-let env_texture: THREE.Texture;
 let face_mat_1;
 let face_mat_2;
 
-new EXRLoader().load(env_texture_url, texture => {
-  texture.mapping = THREE.EquirectangularReflectionMapping;
+// new EXRLoader().load(env_texture_url, texture => {
+//   texture.mapping = THREE.EquirectangularReflectionMapping;
 
-  env_texture = env_generator.fromEquirectangular(texture).texture;
-  // const env_texture = env_texture_generator.fromEquirectangular()
-  const gltfLoader = new GLTFLoader();
-  gltfLoader.load(tile_url, gltf => {
-    const reference_tile = gltf.scene;
+//   env_texture = env_generator.fromEquirectangular(texture).texture;
+//   // const env_texture = env_texture_generator.fromEquirectangular()
+const gltfLoader = new GLTFLoader();
+gltfLoader.load(tile_url, gltf => {
+  const reference_tile = gltf.scene;
 
-    face_mat_1 = (reference_tile.children.find(x => x.name === "TileFace") as THREE.Mesh).material as THREE.MeshStandardMaterial;
-    face_mat_2 = face_mat_1.clone();
-    face_mat_2.color.set(0x4433BB);
+  face_mat_1 = (reference_tile.children.find(x => x.name === "TileFace") as THREE.Mesh).material as THREE.MeshStandardMaterial;
+  face_mat_2 = face_mat_1.clone();
+  face_mat_2.color.set(0x4433BB);
 
-    // const reference_tile = gltf.scene;
-    // reference_tile.castShadow = true; // todo: cast & receive shadows for all children
-    // @ts-ignore
-    reference_tile.children.forEach((child: THREE.Mesh) => {
-      let mat = (child.material as THREE.MeshStandardMaterial);
-      mat.envMap = env_texture;
-      mat.envMapIntensity = .1;
-      child.castShadow = true;
-      child.receiveShadow = true;
-    });
-    reference_tile.castShadow = true;
-    reference_tile.receiveShadow = true;
-
-
-    for (let row = 0; row < 7; row++) {
-      let cur_row: Tile[] = [];
-      for (let col = 0; col < 7; col++) {
-        let cur_tile = makeTile(reference_tile, new THREE.Vector2(col, row));
-        cur_tile.group.position.set((row - 3) * tile_spacing, 0, (col - 3) * tile_spacing);
-        cur_row.push(cur_tile);
-      }
-      tiles.push(cur_row);
-    }
+  // const reference_tile = gltf.scene;
+  // reference_tile.castShadow = true; // todo: cast & receive shadows for all children
+  // @ts-ignore
+  reference_tile.children.forEach((child: THREE.Mesh) => {
+    // let mat = (child.material as THREE.MeshStandardMaterial);
+    // mat.envMap = env_texture;
+    // mat.envMapIntensity = .1;
+    child.castShadow = true;
+    child.receiveShadow = true;
   });
+  reference_tile.castShadow = true;
+  reference_tile.receiveShadow = true;
+
+
+  for (let row = 0; row < 7; row++) {
+    let cur_row: Tile[] = [];
+    for (let col = 0; col < 7; col++) {
+      let cur_tile = makeTile(reference_tile, new THREE.Vector2(col, row));
+      cur_tile.group.position.set((row - 3) * tile_spacing, 0, (col - 3) * tile_spacing);
+      cur_row.push(cur_tile);
+    }
+    tiles.push(cur_row);
+  }
 });
+// });
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
@@ -118,7 +126,7 @@ window.addEventListener('pointermove', event => {
 });
 
 let z_vec = new THREE.Vector3(0, 0, 1);
-window.addEventListener("pointerdown", ev => {
+window.addEventListener("pointerdown", _ => {
   if (cur_hovering_tile === null) return;
 
   let tmp = { clicked: 0 };
@@ -232,6 +240,13 @@ function makeTile(reference_tile: THREE.Group, index: THREE.Vector2): Tile {
 
 // {
 //   const color = 0xFFFFFF;
+//   const intensity = 1.3;
+//   const light = new THREE.AmbientLight(color, intensity);
+//   // scene.add(light);
+// }
+
+// {
+//   const color = 0xFFFFFF;
 //   const intensity = 1;
 //   const light = new THREE.PointLight(color, intensity);
 //   light.position.set(-1, 1, 4);
@@ -265,6 +280,7 @@ function updateTile(tile: Tile) {
   tile.group.scale.set(scale, scale, scale);
   tile.group.position.setY(hover_val);
   tile.light_ring_material.emissiveIntensity = lerp(1, 10, tile.hovered);
+  tile.light_ring_material.emissiveIntensity = Math.max(1, tile.light_ring_material.emissiveIntensity);
 }
 
 // function updateTile(tile: Tile, dt: number) {
@@ -345,6 +361,7 @@ function animate(cur_time: number) {
     camera.updateProjectionMatrix();
   }
 
+  // @ts-ignore
   let delta_time = (cur_time - last_time) * .001;
   last_time = cur_time;
 
@@ -399,15 +416,15 @@ function resizeRendererToDisplaySize(renderer: THREE.WebGLRenderer) {
   return needResize;
 }
 
-function towards(cur: number, target: number, max_delta: number): number {
-  if (cur > target) {
-    return Math.max(cur - max_delta, target);
-  } else if (cur < target) {
-    return Math.min(cur + max_delta, target);
-  } else {
-    return target;
-  }
-}
+// function towards(cur: number, target: number, max_delta: number): number {
+//   if (cur > target) {
+//     return Math.max(cur - max_delta, target);
+//   } else if (cur < target) {
+//     return Math.min(cur + max_delta, target);
+//   } else {
+//     return target;
+//   }
+// }
 
 function inRangeInclusive(value: number, min: number, max: number) {
   return value >= min && value <= max;
