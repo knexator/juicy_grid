@@ -62,6 +62,8 @@ const env_generator = new THREE.PMREMGenerator(renderer);
 env_generator.compileEquirectangularShader();
 
 let env_texture: THREE.Texture;
+let face_mat_1;
+let face_mat_2;
 
 new EXRLoader().load(env_texture_url, texture => {
   texture.mapping = THREE.EquirectangularReflectionMapping;
@@ -71,6 +73,11 @@ new EXRLoader().load(env_texture_url, texture => {
   const gltfLoader = new GLTFLoader();
   gltfLoader.load(tile_url, gltf => {
     const reference_tile = gltf.scene;
+
+    face_mat_1 = (reference_tile.children.find(x => x.name === "TileFace") as THREE.Mesh).material as THREE.MeshStandardMaterial;
+    face_mat_2 = face_mat_1.clone();
+    face_mat_2.color.set(0x4433BB);
+
     // const reference_tile = gltf.scene;
     // reference_tile.castShadow = true; // todo: cast & receive shadows for all children
     // @ts-ignore
@@ -118,6 +125,7 @@ window.addEventListener("pointerdown", ev => {
   let clicked_tile = cur_hovering_tile;
   clicked_tile.clicking = true;
   anime.remove(clicked_tile);
+  let pending_change = true;
   anime({
     targets: tmp,
     clicked: 1,
@@ -125,6 +133,11 @@ window.addEventListener("pointerdown", ev => {
     duration: 600,
     update(anim) {
       clicked_tile.group.setRotationFromAxisAngle(z_vec, Math.PI * 2 * tmp.clicked);
+      if (pending_change && anim.progress > .1) {
+        pending_change = false;
+        clicked_tile.game_state = !clicked_tile.game_state;
+        clicked_tile.tile_face.material = clicked_tile.game_state ? face_mat_2! : face_mat_1!;
+      }
       // clicked_tile.wrap.position.setY(tmp.clicked)
     },
     // complete(anim) {
@@ -172,7 +185,8 @@ type Tile = {
   moving_up: boolean, // unused
   // currently jumping after a click
   clicking: boolean,
-  cur_anim: anime.AnimeInstance | null,
+  tile_face: THREE.Mesh,
+  game_state: boolean,
 };
 
 function makeTile(reference_tile: THREE.Group, index: THREE.Vector2): Tile {
@@ -184,6 +198,8 @@ function makeTile(reference_tile: THREE.Group, index: THREE.Vector2): Tile {
   let light_ring = new_tile.children.find(x => x.name === "TileLight") as THREE.Mesh;
   light_ring.material = (light_ring.material as THREE.Material).clone();
 
+  let tile_face = new_tile.children.find(x => x.name === "TileFace") as THREE.Mesh;
+
   return {
     wrap: new_tile_wrap,
     group: new_tile,
@@ -192,8 +208,9 @@ function makeTile(reference_tile: THREE.Group, index: THREE.Vector2): Tile {
     hovered: 0,
     neighboured: 0,
     moving_up: true,
-    cur_anim: null,
     clicking: false,
+    tile_face: tile_face,
+    game_state: false,
   }
 };
 
